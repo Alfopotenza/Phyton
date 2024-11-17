@@ -1,72 +1,146 @@
-import Constants
-import Objects
 import functions
-from Objects import Charge, Vector
-from functions import electric_field, coloumb_formula
+from Objects import *
+from functions import *
 import numpy as np
-def main(args = 0):
-    print(f"che tipo di esercizio vuoi svolgere? "
-          f"\n[1]: esercizi contenenti un punto P"
-          f"\n[2]: esercizi contenenti molle"
-          f"\n[3]: esercizi contenenti dinamica"
-          f"\n[4]: esercizi contenenti cariche in posizioni particolari")
-    choice = input()
-    if choice == "1":
-        print(f"cosa chiede l'esercizio?"
-              f"\n[1]: la distanza"
-              f"\n[2]: l'energia in un punto P"
-              f"\n[3]: la forza in un punto P")
-        question = int(input())
+import scipy.optimize as opt
+def calc_vector_for_charge(v = Vector(), c = Charge(), d:float = 0):
+    v.module = coloumb_formula(c.charge, d, Vector())
 
-        print("quante cariche ci sono?")
-        nQ = int(input())
-        distances = []
-        charges = []
-        energies = []
-        for i in range(nQ):
-            print(f"come viene espressa la distanza tra P e Q{i}?"
-                  f"\n[1] 2 punti vengono espressi"
-                  f"\n[2] la distanza viene espressa"
-                  f"\n[3] la relazione tra Q1, Q2 e PQ viene espressa")
-            choice = input()
-            if choice == "1":
-                #TODO potrebbe chiedere più di  un punto, inserire for loop
-                print("inserisci xp")
-                x1 = float(input())
-                print("inserisci xq")
-                x2 = float(input())
-                print("inserisci yp")
-                y1 = float(input())
-                print("inserisci yq")
-                y2 = float(input())
-                dist = functions.point_distance(x1, x2, y1, y2)
-            if choice == "2":
-                print("inserisci la distanza")
-                dist = float(input())
-            if choice == "3":
-                print("inserisci la distanza tra Q1 e Q2")
-                q1q2dist = float(input())
-                print("inserisci la distanza tra Q1 e P")
-                q1Pdist = float(input())
-            distances.append(dist)
-            print(f"Quanto vale la carica {i} in N/C?")
-            value = input()
-            if value != 0:
-                charges.append(Charge(float(value)))
-            print(f"quanto vale l'energia E della Q?")
-            value = input()
-            if value != 0:
-                energies.append(Vector(float(value)))
-        if len(distances) == 0:
-            print("the distance is" + functions.coloumb_formula(charges[0], Charge(), 0, energies[0]))
-        else:
-            print("esistono distanze")
-            if len(charges) != 0:
-                for charge in charges:
-                    energies[0] = functions.coloumb_formula(charge, Charge(), distances[0], Vector())
-                    print(f"l'energia a Q{0} è {energies[0]}")
-            if len(energies) != 0:
-                for energy in energies:
-                    charges[0] = functions.coloumb_formula(charges[0], Charge(), distances[0], Vector(energy))
-                    print(f"la carica a Q{0} è {charges[0]}")
-main()
+def create_sheet():
+    print("densità?")
+    sigma = input()
+    try: sigma = float(sigma)
+    except ValueError: sigma = None
+    print("campo elettrico?")
+    e = input()
+    try: e = float(e)
+    except ValueError: e = None
+    sigma = float(sigma) if type(sigma) == float else None
+    e = float(e) if type(e) == float else None
+    return Lastra(Constants.epsilon, **{"density": sigma, "e": e})
+def create_wire():
+    print("densità?")
+    density = input()
+    try: density = float(density)
+    except ValueError: density = None
+    print("posizione x?")
+    pos_x = input()
+    try: pos_x = float(pos_x)
+    except ValueError: pos_x = None
+    print("campo elettrico?")
+    e = input()
+    try: e = float(e)
+    except ValueError: e = None
+    return Filo(Constants.epsilon, 3.14, **{"density": density, "pos_x": pos_x, "e": e})
+def create_generic():
+    print("Carica?")
+    charge = float(input())
+    try: charge = float(charge)
+    except ValueError: charge = None
+    print("posizione x?")
+    pos_x = float(input())
+    try: pos_x = float(pos_x)
+    except ValueError: pos_x = None
+    print("campo elettrico?")
+    e = input()
+    try: e = float(e)
+    except ValueError: e = None
+    return CaricaGenerica(Constants.couloumb_constant, **{"q": charge, "pos_x": pos_x, "e": e})
+def create_sphere():
+    print("raggio sfera?")
+    r = float(input())
+    try: r = float(r)
+    except ValueError: r = None
+    print("posizione x?")
+    pos_x = float(input())
+    try: pos_x = float(pos_x)
+    except ValueError: pos_x = None
+    print("carica?")
+    charge = float(input())
+    try: charge = float(charge)
+    except ValueError: charge = None
+    print("campo elettrico?")
+    e = input()
+    try: e = float(e)
+    except ValueError: e = None
+    return Sfera(Constants.couloumb_constant, **{"q": charge, "pos_x": pos_x, "e": e, "r": r})
+
+
+def monodim_force():
+    print("quante cariche ci sono?")
+    iters = int(input())
+    charges = []
+    for i in range(iters):
+        print("che tipo di carica è? \n[1]: Lastra \n[2]: Filo \n[3]: Sfera \n[4]: carica generica")
+        choice = int(input())
+        if choice == 1: charges.append(create_sheet())
+        elif choice == 2: charges.append(create_wire())
+        elif choice == 3: charges.append(create_sphere())
+        elif choice == 4: charges.append(create_generic())
+    return calc_forces(charges)
+
+
+
+
+
+def calc_forces(charges:[Charge()]):
+    print(charges)
+    print("vuoi trovare \n[1] E \n[2] dist data dall'equilibrio")
+    choice = int(input())
+    if choice == 1:
+        print("posizione x del punto?")
+        x_pos = float(input())
+        # creo una lista di forze
+        forces = []
+        # per ogni oggetto Carica()
+        for charge in charges:
+            #calcolo la distanza dal punto
+            if type(charge) != Lastra:
+                dist = axis_distance(x_pos, charge.variabili.get("pos_x"))
+                charge.add_dist(dist)
+            #se la distanza E la carica sono fornite
+            incognita = charge.calcola()
+            print(incognita)
+            if incognita == {"e": incognita["e"]}:
+                e_force = Vector(incognita["e"])
+                e_force.fix_dir(x_pos, charge)
+                forces.append(e_force)
+            else:
+                return incognita
+        #calcolo la forza totale
+        return total_e(forces)
+    '''if choice == 2:
+        r_eq = calc_equilibrio(charges[0], charges[1], variabile = "r")
+        return r_eq'''
+
+'''def calc_equilibrio(entita1, entita2, variabile = "r", tol = 1e-12, maxiter= 100):
+    def field_difference(value):
+        entita1.variabili[variabile] = value
+        entita2.variabili[variabile] = value
+
+        e1 = entita1.calcola()
+        e2 = entita2.calcola()
+
+        return e1 - e2
+
+    stima_iniziale = 1 if variabile in ["r", "q", "density"] else 0
+
+    lowlim = 1e-12
+    highlim = 1e3
+
+    try:
+        result = opt.newton(
+            field_difference, stima_iniziale, tol = tol, maxiter = maxiter)
+        return result
+    except RuntimeError as e:
+        print(f"metodo Newton non funzionante: {e} Provo Brent")
+        try:
+            result = opt.brentq(field_difference, lowlim, highlim, xtol = tol)
+            return result
+        except ValueError as e:
+            print(f"Brent fallito. {e}. Non c'è soluzione")
+        return None
+    except Exception as e:
+        print(f"errore generico: {e}")
+        return None'''
+print(monodim_force())
