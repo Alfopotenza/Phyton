@@ -45,7 +45,7 @@ class Vector:
                 return
         else:
             density = charge.variabili.get("density")
-            if density < 0:
+            if density < 0 or pos_x > point_x:
                 self.module = -np.abs(self.module)
                 return
 
